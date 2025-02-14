@@ -1,0 +1,64 @@
+# Life expectancy
+stset age_last, failure(death_status == 1) enter(age_dementia)  
+stpm2 i.sdoh_status i.sex , df(4) scale(hazard) eform nolog   
+
+// create an empty file to save the yll results - ru altogether 
+preserve
+clear
+tempfile objmm
+save `objmm', emptyok replace
+restore
+timer clear 1
+// create the conditional age and the time variable
+foreach i  of num 55(1)100 {
+		timer on 1
+		preserve
+		gen t`i'= `i' in 1/100  
+		range tt`i' `i' 100 100
+	    predictnl mod2`i' = [predict( surv timevar(tt`i') at( sdoh_status 2) ) / predict( surv timevar(t`i') at(sdoh_status 2))] ///
+				    	    - [predict( surv timevar(tt`i') at( sdoh_status 1) ) / predict( surv timevar(t`i') at(sdoh_status 1) ) ],  ci(mod2_lci`i' mod2_uci`i') level(95) 
+			
+		predictnl mod3`i' = [predict( surv timevar(tt`i') at( sdoh_status 3) ) / predict( surv timevar(t`i') at(sdoh_status 3))] ///
+				    	     - [predict( surv timevar(tt`i') at( sdoh_status 1) ) / predict( surv timevar(t`i') at(sdoh_status 1) ) ],  ci(mod3_lci`i' mod3_uci`i') level(95) 
+				
+					 				 					 
+		integ mod2`i' tt`i'
+	    scalar area_mod2`i' = r(integral)
+		
+		integ mod2_lci`i' tt`i'
+	    scalar area_mod2_lci`i' = r(integral)
+		
+		integ mod2_uci`i' tt`i'
+	    scalar area_mod2_uci`i' = r(integral)
+		
+		integ mod3`i' tt`i'
+	    scalar area_mod3`i' = r(integral)
+		
+		integ mod3_lci`i' tt`i'
+	    scalar area_mod3_lci`i' = r(integral)
+		
+		integ mod3_uci`i' tt`i'
+	    scalar area_mod3_uci`i' = r(integral)
+				
+		
+		clear
+		set obs 1
+		gen cond = `i'
+		gen erl_mod2 = area_mod2`i'
+		gen erl_mod2_lci = area_mod2_lci`i'
+		gen erl_mod2_uci = area_mod2_uci`i'
+		
+		gen erl_mod3 = area_mod3`i'
+		gen erl_mod3_lci = area_mod3_lci`i'
+		gen erl_mod3_uci = area_mod3_uci`i'
+			
+		
+			
+		append using `objmm'
+		save `objmm', replace
+		restore
+		timer off 1
+	  }   
+timer list 1    
+use `objmm', clear
+sort cond
