@@ -1,0 +1,21 @@
+# Importance of factors
+mydata <- Analysis_COX_SDoH_Dementia
+library(rms)
+fit <- cph(Surv(Dementia_years,Dementia_status==1)~SDoH_status +Cov1+Cov2+Cov3+Cov4+Cov5+Cov6,data=mydata)
+nagelkerke_r2 <- 1 - exp(-(fit$loglik[2] - fit$loglik[1]) * 2 / fit$n)
+print(paste("Nagelkerke's R2:", nagelkerke_r2))
+library(survival)  # Load the survival package
+# Fit the full Cox proportional hazards model
+full_model <- cph(Surv(Dementia_years, Dementia_status == 1) ~ SDoH_status +Cov1+Cov2+Cov3+Cov4+Cov5+Cov6, data = mydata)
+full_model_r2 <- 1 - exp(-(full_model$loglik[2] - full_model$loglik[1]) * 2 / full_model$n)
+variables <- c("SDoH_status", "Cov1", "Cov2", "Cov3", "Cov4", "Cov5", "Cov6")
+Variables <- c("SDoH", "Cov1", "Cov2", "Cov3", "Cov4", "Cov5", "Cov6")
+r2_changes <- vector("numeric", length(variables))
+for (i in seq_along(variables)) {
+  reduced_formula <- as.formula(paste("Surv(Dementia_years, Dementia_status == 1) ~", paste(variables[-i], collapse = "+")))
+  reduced_model <- cph(reduced_formula, data = mydata, x = TRUE, y = TRUE)
+  reduced_model_r2 <- 1 - exp(-(reduced_model$loglik[2] - reduced_model$loglik[1]) * 2 / reduced_model$n)
+  r2_changes[i] <- full_model_r2 - reduced_model_r2
+}
+RESULT_Importance_SDoH <- data.frame('Variable'=Variables,
+                                     'Importance.Value'=sprintf('%0.9f',r2_changes))
