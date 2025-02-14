@@ -1,1 +1,0 @@
-# UKB_SDoH_Dementia
