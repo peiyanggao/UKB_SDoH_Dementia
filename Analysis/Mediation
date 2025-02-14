@@ -1,0 +1,121 @@
+# Mediation analysis
+mydata <- Analysis_Mediation_SDoH_Mediator_Dementia
+var1 <- c('SDoH')
+var2 <- c('Dementia')
+var3 <- c("PHQ9_score", "GAD7_score", "Subjective.Wellbeing_score", "Loneliness_score", "Life.Satisfaction_score",
+          "Phenoage","Phenoage_Advance",'TL',"Frailty.Continnum",
+          "Alcohol", "Smoking", "Diet_Quality", "Sleep.Duration", "Physical.Activity.Status",
+          "CRP","Neutrophils_count","Neutrophils_per",
+          "Monocyte_count","Monocyte_per","Lymphocytes_count","Lymphocytes_per", "Platelet_count","NLR","LMR","PLR","SII"
+)
+
+var4 <- c('Cov1','Cov2','Cov3','Cov4','Cov5','Cov6') 
+
+Result <- data.frame()
+
+for (Exposure in var1) {
+  for (Outcome in var2) {
+    for (Mediator in var3) {
+      library(CMAverse)
+      safe_name <- function(x) {
+        x <- gsub(" ", "_", x)  
+        x <- gsub("[\\(\\)]", "", x) 
+        x <- gsub("[^[:alnum:]_]", "_", x) 
+        return(x)
+      }
+      
+      safe_mediator <- safe_name(Mediator)
+      
+      select_cols <- c(
+        "eid",
+        safe_name(Exposure),
+        safe_name(Mediator),
+        paste0(safe_name(Outcome),"_years"),
+        paste0(safe_name(Outcome),"_status"),
+        sapply(var4, safe_name)  
+      )
+    
+      mmydata <- mydata %>% 
+        rename_with(~safe_name(.), everything()) %>%
+        dplyr::select(all_of(select_cols)) %>%
+        filter(complete.cases(.))
+      
+      mmydata[[safe_name(Mediator)]] <- as.numeric(mmydata[[safe_name(Mediator)]])
+      mmydata[[paste0(safe_name(Outcome),"_status")]] <- as.numeric(as.factor(mmydata[[paste0(safe_name(Outcome),"_status")]]))
+      
+      med_res1 <- cmest(data = mmydata,
+                        model = "rb", 
+                        outcome = paste0(safe_name(Outcome),'_years'),
+                        event = paste0(safe_name(Outcome),"_status"),
+                        exposure = safe_name(Exposure),
+                        astar = 0, 
+                        a = 1,
+                        mediator = safe_name(Mediator),
+                        basec = sapply(var4, safe_name), 
+                        mreg = list('linear'), 
+                        yreg = "coxph", 
+                        EMint = FALSE, 
+                        mval = list(0),
+                        estimation = "imputation",
+                        inference = "bootstrap", 
+                        nboot = 5000, 
+                        boot.ci.type = "per")
+      
+      result <- data.frame(
+        'Exposure' = Exposure,
+        'Mediator' = Mediator,
+        'Outcome' = Outcome,
+        'Prop' = paste0(sprintf('%0.2f', med_res1$effect.pe['pm']*100), '%'),
+        'Prop.CI' = paste0(sprintf('%0.2f', med_res1$effect.pe['pm']*100), '%',
+                           ' (', sprintf('%0.2f', med_res1$effect.ci.low['pm']*100), '%',
+                           '-', sprintf('%0.2f', med_res1$effect.ci.high['pm']*100), '%',
+                           ')'),
+        'Prop.P' = ifelse(med_res1$effect.pval['pm'] < 0.001, '<0.001', 
+                          sprintf('%0.3f', med_res1$effect.pval['pm'])),
+        'TE' = paste0(sprintf('%0.2f', med_res1$effect.pe['Rte']*100), '%'),
+        'TE.CI' = paste0(sprintf('%0.2f', med_res1$effect.pe['Rte']*100), '%',
+                         ' (', sprintf('%0.2f', med_res1$effect.ci.low['Rte']*100), '%',
+                         '-', sprintf('%0.2f', med_res1$effect.ci.high['Rte']*100), '%',
+                         ')'),
+        'TE.P' = ifelse(med_res1$effect.pval['Rte'] < 0.001, '<0.001',
+                        sprintf('%0.3f', med_res1$effect.pval['Rte'])),
+        'DE' = paste0(sprintf('%0.2f', med_res1$effect.pe['Rtnde']*100), '%'),
+        'DE.CI' = paste0(sprintf('%0.2f', med_res1$effect.pe['Rtnde']*100), '%',
+                         ' (', sprintf('%0.2f', med_res1$effect.ci.low['Rtnde']*100), '%',
+                         '-', sprintf('%0.2f', med_res1$effect.ci.high['Rtnde']*100), '%',
+                         ')'),
+        'DE.P' = ifelse(med_res1$effect.pval['Rtnde'] < 0.001, '<0.001',
+                        sprintf('%0.3f', med_res1$effect.pval['Rtnde'])),
+        'IE' = paste0(sprintf('%0.2f', med_res1$effect.pe['Rtnie']*100), '%'),
+        'IE.CI' = paste0(sprintf('%0.2f', med_res1$effect.pe['Rtnie']*100), '%',
+                         ' (', sprintf('%0.2f', med_res1$effect.ci.low['Rtnie']*100), '%',
+                         '-', sprintf('%0.2f', med_res1$effect.ci.high['Rtnie']*100), '%',
+                         ')'),
+        'IE.P' = ifelse(med_res1$effect.pval['Rtnie'] < 0.001, '<0.001',
+                        sprintf('%0.3f', med_res1$effect.pval['Rtnie'])),
+        'Prop.raw' = med_res1$effect.pe['pm'],
+        'Prop.LCI.raw' = med_res1$effect.ci.low['pm'],
+        'Prop.UCI.raw' = med_res1$effect.ci.high['pm'],
+        'Prop.P.raw' = med_res1$effect.pval['pm'],
+        'TE.raw' = med_res1$effect.pe['Rte'],
+        'TE.LCI.raw' = med_res1$effect.ci.low['Rte'],
+        'TE.UCI.raw' = med_res1$effect.ci.high['Rte'],
+        'DE.raw' = med_res1$effect.pe['Rtnde'],
+        'DE.LCI.raw' = med_res1$effect.ci.low['Rtnde'],
+        'DE.UCI.raw' = med_res1$effect.ci.high['Rtnde'],
+        'DE.P.raw' = med_res1$effect.pval['Rtnde'],
+        'IE.raw' = med_res1$effect.pe['Rtnie'],
+        'IE.LCI.raw' = med_res1$effect.ci.low['Rtnie'],
+        'IE.UCI.raw' = med_res1$effect.ci.high['Rtnie'],
+        'IE.P.raw' = med_res1$effect.pval['Rtnie']
+      )
+      Result <- rbind(Result, result)
+      print(paste0('Exposure = ', Exposure, ' | Mediator = ', Mediator, ' | Outcome = ', Outcome))
+    }
+  }
+
+
+}
+
+
+RESULT_Mediation_SDoHscore_Mediator_Dementia <- Result
