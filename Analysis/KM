@@ -1,0 +1,20 @@
+# KM plot
+library(survminer)
+fit <- survfit(Surv(Dementia_years,Dementia_status==1) ~ SDoH_status, data=Analysis_COX_SDoH_Dementia)
+summary(fit)
+palette_color <- c('#89BED9','#2165AA','#073162')
+Fig2.KM_ACD <- ggsurvplot(fit,
+                          data = Analysis_COX_SDoH_Dementia,
+                          xlab = 'Years',
+                          ylab = 'Survival probability',
+                          linetype = 1, # Line type
+                          palette = palette_color, # Color palette
+                          legend='top', # Legend position
+                          legend.title = '',
+                          ylim = c(0.96, 1), # Y-axis range
+                          xlim = c(0, 16),
+                          pval = T, pval.size = 5, pval.coord = c(4, 0.97), # P-value
+                          censor.shape = "", censor.size = 0, # Censor point shape and size
+                          title = 'All-cause dementia',
+                          legend.labs = c("Unfavorable", "Intermediate",'Favorable')
+) 
