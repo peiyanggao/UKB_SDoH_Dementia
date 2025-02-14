@@ -1,0 +1,10 @@
+# RCS
+library(rms)
+dd<-datadist(Analysis_COX_SDoH_Dementia, q.display = c(0,1)) 
+summary(Analysis_COX_SDoH_Dementia$SDoH_score)
+dd$limits$SDoH_score[2] <- 0  
+options(datadist='dd')
+fit <- cph(Surv(Dementia_years,Dementia_status==1) ~ rcs(SDoH_score,3) +Cov1+Cov2+Cov3+Cov4+Cov5+Cov6 , x=TRUE, y=TRUE,data=Analysis_COX_SDoH_Dementia)
+anova(fit)
+HR <- Predict(fit,SDoH_score,fun=exp,type="predictions",ref.zero=TRUE,conf.int=0.95,digits=2)
+HR
