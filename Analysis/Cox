@@ -1,1 +1,12 @@
-# UKB_SDoH_Dementia
+# Cox proportional hazard model
+library(survival)
+mydata <- Analysis_Cox_SDoH_Dementia
+
+fit <- coxph(Surv(Outcome_period,Outcome_status==1) ~ SDoH_status +Cov1+Cov2+Cov3+Cov4+Cov5+Cov6, data = mydata)
+summary(fit)
+
+# PH test
+res.cox <- coxph(Surv(Outcome_period,Outcome_status==1) ~ SDoH_status +Cov1+Cov2+Cov3+Cov4+Cov5+Cov6, data = mydata)
+cox.zph(res.cox)
+
+
