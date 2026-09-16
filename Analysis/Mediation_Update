@@ -1,0 +1,81 @@
+library(CMAverse)
+
+# Dataset
+mydata <- Analysis_Mediation_SDoH_Mediator_Dementia
+
+# Continuous mediators use linear regression
+continuous_mediators <- c(
+  "PHQ9_score",
+  "GAD7_score",
+  "Subjective.Wellbeing_score",
+  "Loneliness_score",
+  "Life.Satisfaction_score",
+  "Phenoage",
+  "Phenoage_Advance",
+  "TL",
+  "Frailty.Continnum",
+  "CRP",
+  "Neutrophils_count",
+  "Neutrophils_per",
+  "Monocyte_count",
+  "Monocyte_per",
+  "Lymphocytes_count",
+  "Lymphocytes_per",
+  "Platelet_count",
+  "NLR",
+  "LMR",
+  "PLR",
+  "SII"
+)
+
+# Binary mediators are coded as 0/1 and use logistic regression
+binary_mediators <- c(
+  "Alcohol",
+  "Smoking",
+  "Diet_Quality",
+  "Sleep.Duration",
+  "Physical.Activity.Status"
+)
+
+# Select one mediator
+Mediator <- "PHQ9_score"
+
+# Specify the mediator model
+mediator_model <- if (
+  Mediator %in% binary_mediators
+) {
+  "logistic"
+} else {
+  "linear"
+}
+
+# Mediation analysis
+med_res <- cmest(
+  data = mydata,
+  model = "rb",
+  outcome = "Dementia_years",
+  event = "Dementia_status",
+  exposure = "SDoH",
+  mediator = Mediator,
+  basec = c(
+    "Cov1",
+    "Cov2",
+    "Cov3",
+    "Cov4",
+    "Cov5",
+    "Cov6"
+  ),
+  astar = 0,
+  a = 1,
+  mreg = list(mediator_model),
+  yreg = "coxph",
+  EMint = FALSE,
+  mval = list(0),
+  estimation = "imputation",
+  inference = "bootstrap",
+  nboot = 1000,
+  boot.ci.type = "per"
+)
+
+# Results
+summary(med_res)
