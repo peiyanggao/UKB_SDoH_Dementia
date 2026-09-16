@@ -1,0 +1,71 @@
+# Importance of factors based on Cox-Snell pseudo-R2
+
+library(survival)
+library(rms)
+
+mydata <- Analysis_COX_SDoH_Dementia
+
+# Fit the full Cox proportional hazards model
+fit <- cph(
+  Surv(Dementia_years, Dementia_status == 1) ~
+    SDoH_status + Cov1 + Cov2 + Cov3 + Cov4 + Cov5 + Cov6,
+  data = mydata
+)
+
+# Calculate Cox-Snell pseudo-R2
+cox_snell_r2 <- 1 - exp(
+  -2 * (fit$loglik[2] - fit$loglik[1]) / fit$stats["Obs"]
+)
+
+print(paste("Cox-Snell R2:", unname(cox_snell_r2)))
+
+# Predictor names and display labels
+variables <- c(
+  "SDoH_status", "Cov1", "Cov2", "Cov3", "Cov4", "Cov5", "Cov6"
+)
+
+Variables <- c(
+  "SDoH", "Cov1", "Cov2", "Cov3", "Cov4", "Cov5", "Cov6"
+)
+
+r2_changes <- numeric(length(variables))
+
+# Remove each predictor and calculate the reduction in Cox-Snell R2
+for (i in seq_along(variables)) {
+
+  reduced_formula <- as.formula(
+    paste(
+      "Surv(Dementia_years, Dementia_status == 1) ~",
+      paste(variables[-i], collapse = " + ")
+    )
+  )
+
+  reduced_model <- cph(
+    reduced_formula,
+    data = mydata,
+    x = TRUE,
+    y = TRUE
+  )
+
+  reduced_model_r2 <- 1 - exp(
+    -2 * (reduced_model$loglik[2] - reduced_model$loglik[1]) /
+      reduced_model$stats["Obs"]
+  )
+
+  r2_changes[i] <- cox_snell_r2 - reduced_model_r2
+}
+
+# Keep importance values numeric
+RESULT_Importance_SDoH <- data.frame(
+  Variable = Variables,
+  Importance.Value = r2_changes
+)
+
+# Sort by decreasing importance
+RESULT_Importance_SDoH <- RESULT_Importance_SDoH[
+  order(RESULT_Importance_SDoH$Importance.Value, decreasing = TRUE),
+]
+
+rownames(RESULT_Importance_SDoH) <- NULL
+
+print(RESULT_Importance_SDoH, digits = 9, row.names = FALSE)
