@@ -5,10 +5,18 @@ library(rms)
 
 mydata <- Analysis_COX_SDoH_Dementia
 
+variables <- c("SDoH_status", "cov1", "cov2", "cov3", "cov4", "cov5", "cov6")
+
+model_cols <- c("Dementia_years", "Dementia_status", variables)
+mydata <- as.data.frame(mydata)
+keep <- complete.cases(mydata[, model_cols, drop = FALSE])
+mydata <- droplevels(mydata[keep, , drop = FALSE])
+cat("Number of participants:", nrow(mydata), "\n")
+
 # Fit the full Cox proportional hazards model
 fit <- cph(
   Surv(Dementia_years, Dementia_status == 1) ~
-    SDoH_status + Cov1 + Cov2 + Cov3 + Cov4 + Cov5 + Cov6,
+    SDoH_status + cov1+cov2+cov3+cov4+cov5+cov6,
   data = mydata
 )
 
@@ -20,38 +28,34 @@ cox_snell_r2 <- 1 - exp(
 print(paste("Cox-Snell R2:", unname(cox_snell_r2)))
 
 # Predictor names and display labels
-variables <- c(
-  "SDoH_status", "Cov1", "Cov2", "Cov3", "Cov4", "Cov5", "Cov6"
-)
 
-Variables <- c(
-  "SDoH", "Cov1", "Cov2", "Cov3", "Cov4", "Cov5", "Cov6"
-)
+variables <- c("SDoH_status", "cov1", "cov2", "cov3", "cov4", "cov5", "cov6")
+Variables <- c("SDoH", "cov1", "cov2", "cov3", "cov4", "cov5", "cov6")
 
 r2_changes <- numeric(length(variables))
 
 # Remove each predictor and calculate the reduction in Cox-Snell R2
 for (i in seq_along(variables)) {
-
+  
   reduced_formula <- as.formula(
     paste(
       "Surv(Dementia_years, Dementia_status == 1) ~",
       paste(variables[-i], collapse = " + ")
     )
   )
-
+  
   reduced_model <- cph(
     reduced_formula,
     data = mydata,
     x = TRUE,
     y = TRUE
   )
-
+  
   reduced_model_r2 <- 1 - exp(
     -2 * (reduced_model$loglik[2] - reduced_model$loglik[1]) /
       reduced_model$stats["Obs"]
   )
-
+  
   r2_changes[i] <- cox_snell_r2 - reduced_model_r2
 }
 
