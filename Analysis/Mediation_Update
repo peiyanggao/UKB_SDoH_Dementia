@@ -1,81 +1,104 @@
+# "PHQ9_score",
+# "GAD7_score",
+# "Subjective.Wellbeing_score",
+# "Loneliness_score",
+# "Life.Satisfaction_score",
+# "Phenoage",
+# "Phenoage_Advance",
+# "TL",
+# "Frailty.Continnum",
+# "CRP",
+# "Neutrophils_count",
+# "Neutrophils_per",
+# "Monocyte_count",
+# "Monocyte_per",
+# "Lymphocytes_count",
+# "Lymphocytes_per",
+# "Platelet_count",
+# "NLR",
+# "LMR",
+# "PLR",
+# "SII"
+
+# "Alcohol",
+# "Smoking",
+# "Diet_Quality",
+# "Sleep.Duration",
+# "Physical.Activity.Status"
+
 library(CMAverse)
+library(dplyr)
 
-# Dataset
-mydata <- Analysis_Mediation_SDoH_Mediator_Dementia
-
-# Continuous mediators use linear regression
-continuous_mediators <- c(
-  "PHQ9_score",
-  "GAD7_score",
-  "Subjective.Wellbeing_score",
-  "Loneliness_score",
-  "Life.Satisfaction_score",
-  "Phenoage",
-  "Phenoage_Advance",
-  "TL",
-  "Frailty.Continnum",
-  "CRP",
-  "Neutrophils_count",
-  "Neutrophils_per",
-  "Monocyte_count",
-  "Monocyte_per",
-  "Lymphocytes_count",
-  "Lymphocytes_per",
-  "Platelet_count",
-  "NLR",
-  "LMR",
-  "PLR",
-  "SII"
-)
-
-# Binary mediators are coded as 0/1 and use logistic regression
-binary_mediators <- c(
-  "Alcohol",
-  "Smoking",
-  "Diet_Quality",
-  "Sleep.Duration",
-  "Physical.Activity.Status"
-)
-
-# Select one mediator
+mydata   <- Analysis_Mediation_SDoH_Mediator_Dementia
+Exposure <- "SDoH_score"
 Mediator <- "PHQ9_score"
+Outcome  <- "Dementia"
 
-# Specify the mediator model
-mediator_model <- if (
-  Mediator %in% binary_mediators
-) {
-  "logistic"
-} else {
-  "linear"
+time_var  <- paste0(Outcome, "_years")
+event_var <- paste0(Outcome, "_status")
+covars    <- c("Age", "Sex", "Ethnic", "History_Diabetes",
+               "History_Hypertension", "History_High.Cholesterol")
+
+dat <- mydata %>%
+  dplyr::select(all_of(c(Exposure, Mediator, time_var, event_var, covars))) %>%
+  filter(complete.cases(.))
+
+status <- as.character(dat[[event_var]])
+stopifnot(all(status %in% c("0", "1")), any(status == "1"))
+dat[[event_var]] <- as.integer(status)
+
+dat[[Mediator]] <- as.numeric(as.character(dat[[Mediator]]))
+stopifnot(all(is.finite(dat[[Mediator]])))
+
+
+set.seed(9)
+fit <- cmest(
+  data = dat, model = "rb",
+  outcome = time_var, event = event_var,
+  exposure = Exposure, mediator = Mediator, basec = covars,
+  astar = 0, a = 1,
+  mreg = list("linear"),
+  # mreg = list("logistic"),
+  yreg = "coxph",
+  EMint = FALSE, mval = list(0),
+  estimation = "imputation", inference = "bootstrap",
+  nboot = 1000, boot.ci.type = "per"
+)
+summary(fit)
+
+pe <- fit$effect.pe
+lo <- fit$effect.ci.low
+hi <- fit$effect.ci.high
+pv <- fit$effect.pval
+
+fmt_ci <- function(key) {
+  sprintf("%.2f (%.2f-%.2f)", pe[key], lo[key], hi[key])
+}
+fmt_p <- function(p) {
+  ifelse(is.na(p), NA_character_,
+         ifelse(p < 0.001, "<0.001", sprintf("%.3f", p)))
 }
 
-# Mediation analysis
-med_res <- cmest(
-  data = mydata,
-  model = "rb",
-  outcome = "Dementia_years",
-  event = "Dementia_status",
-  exposure = "SDoH",
-  mediator = Mediator,
-  basec = c(
-    "Cov1",
-    "Cov2",
-    "Cov3",
-    "Cov4",
-    "Cov5",
-    "Cov6"
-  ),
-  astar = 0,
-  a = 1,
-  mreg = list(mediator_model),
-  yreg = "coxph",
-  EMint = FALSE,
-  mval = list(0),
-  estimation = "imputation",
-  inference = "bootstrap",
-  nboot = 1000,
-  boot.ci.type = "per"
+RESULT <- data.frame(
+  Exposure = Exposure,
+  Outcome  = Outcome,
+  N        = nrow(dat),
+  n_med    = 1L,
+  Mediators = Mediator,
+  Prop     = sprintf("%.2f%%", 100 * pe["pm"]),
+  Prop.CI  = sprintf("%.2f%% (%.2f%%-%.2f%%)",
+                     100 * pe["pm"], 100 * lo["pm"], 100 * hi["pm"]),
+  Prop.P   = fmt_p(pv["pm"]),
+  TE.CI    = fmt_ci("Rte"),
+  DE.CI    = fmt_ci("Rtnde"),
+  IE.CI    = fmt_ci("Rtnie"),
+  IE.P     = fmt_p(pv["Rtnie"]),
+  Prop.raw = unname(pe["pm"]),
+  TE.raw   = unname(pe["Rte"]),
+  DE.raw   = unname(pe["Rtnde"]),
+  IE.raw   = unname(pe["Rtnie"]),
+  row.names = NULL
 )
 
-# Results
-summary(med_res)
+print(RESULT, row.names = FALSE)
+
