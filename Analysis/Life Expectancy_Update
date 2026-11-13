@@ -1,96 +1,66 @@
-* Life-expectancy analysis
-* Input: prepared dataset containing participants with incident dementia
-* Missing-value codes must be handled before running this script.
+gen diff=age_last-age_dementia
+drop if diff<=1 
+stset age_last, failure(death_status == 1) enter(age_dementia)  
 
-set more off
+stpm2 i.sdoh_status i.sex  i.ethnic i.history_diabetes i.history_hypertension i.history_highcholesterol , df(4) scale(hazard) eform nolog   
 
-* Retain participants with >1 year of observed post-diagnosis follow-up
-keep if !missing(age_last, age_dementia, death_status, sdoh_status)
-keep if age_last - age_dementia > 1
-
-stset age_last, failure(death_status == 1) enter(age_dementia)
-
-* Main model
-stpm2 ib1.sdoh_status i.sex i.ethnic ///
-    i.history_diabetes i.history_hypertension i.history_highcholesterol, ///
-    df(4) scale(hazard) eform nolog
-
-* Additional model: run separately by replacing the main model above
-* stpm2 ib1.sdoh_status i.sex i.ethnic ///
-*     i.history_diabetes i.history_hypertension i.history_highcholesterol ///
-*     i.smoking i.alcohol i.sleepduration i.diet_quality c.bmi, ///
-*     df(4) scale(hazard) eform nolog
-
-* Create results file
+// create an empty file to save the yll results - ru altogether 
 preserve
 clear
-tempfile results
-save `results', emptyok replace
+tempfile objmm
+save `objmm', emptyok replace
 restore
-
 timer clear 1
-timer on 1
-
-* Starting ages: 46–100; integration upper limit: age 100
-foreach a of numlist 46/100 {
-
-    preserve
-
-    if `a' < 100 {
-
-        tempvar age_start age_grid
-        gen double `age_start' = `a' in 1/100
-        range `age_grid' `a' 100 100
-
-        foreach g of numlist 2 3 {
-
-            tempvar difference lower upper
-
-            predictnl `difference' = ///
-                (predict(surv timevar(`age_grid') at(sdoh_status `g')) / ///
-                 predict(surv timevar(`age_start') at(sdoh_status `g'))) - ///
-                (predict(surv timevar(`age_grid') at(sdoh_status 1)) / ///
-                 predict(surv timevar(`age_start') at(sdoh_status 1))), ///
-                ci(`lower' `upper') level(95)
-
-            quietly integ `difference' `age_grid'
-            scalar estimate`g' = r(integral)
-
-            quietly integ `lower' `age_grid'
-            scalar lower`g' = r(integral)
-
-            quietly integ `upper' `age_grid'
-            scalar upper`g' = r(integral)
-        }
-    }
-    else {
-        * The integral from age 100 to age 100 is zero
-        foreach g of numlist 2 3 {
-            scalar estimate`g' = 0
-            scalar lower`g' = 0
-            scalar upper`g' = 0
-        }
-    }
-
-    clear
-    set obs 1
-    gen cond = `a'
-
-    foreach g of numlist 2 3 {
-        gen double erl_mod`g' = scalar(estimate`g')
-        gen double erl_mod`g'_lci = scalar(lower`g')
-        gen double erl_mod`g'_uci = scalar(upper`g')
-    }
-
-    append using `results'
-    save `results', replace
-    restore
-}
-
-timer off 1
-timer list 1
-
-use `results', clear
+// create the conditional age and the time variable
+foreach i  of num 46(1)100 {
+		timer on 1
+		preserve
+		gen t`i'= `i' in 1/100  
+		range tt`i' `i' 100 100
+	    predictnl mod2`i' = [predict( surv timevar(tt`i') at( sdoh_status 2) ) / predict( surv timevar(t`i') at(sdoh_status 2))] ///
+				    	    - [predict( surv timevar(tt`i') at( sdoh_status 1) ) / predict( surv timevar(t`i') at(sdoh_status 1) ) ],  ci(mod2_lci`i' mod2_uci`i') level(95) 
+			
+		predictnl mod3`i' = [predict( surv timevar(tt`i') at( sdoh_status 3) ) / predict( surv timevar(t`i') at(sdoh_status 3))] ///
+				    	     - [predict( surv timevar(tt`i') at( sdoh_status 1) ) / predict( surv timevar(t`i') at(sdoh_status 1) ) ],  ci(mod3_lci`i' mod3_uci`i') level(95) 
+				
+					 				 					 
+		integ mod2`i' tt`i'
+	    scalar area_mod2`i' = r(integral)
+		
+		integ mod2_lci`i' tt`i'
+	    scalar area_mod2_lci`i' = r(integral)
+		
+		integ mod2_uci`i' tt`i'
+	    scalar area_mod2_uci`i' = r(integral)
+		
+		integ mod3`i' tt`i'
+	    scalar area_mod3`i' = r(integral)
+		
+		integ mod3_lci`i' tt`i'
+	    scalar area_mod3_lci`i' = r(integral)
+		
+		integ mod3_uci`i' tt`i'
+	    scalar area_mod3_uci`i' = r(integral)
+				
+		
+		clear
+		set obs 1
+		gen cond = `i'
+		gen erl_mod2 = area_mod2`i'
+		gen erl_mod2_lci = area_mod2_lci`i'
+		gen erl_mod2_uci = area_mod2_uci`i'
+		
+		gen erl_mod3 = area_mod3`i'
+		gen erl_mod3_lci = area_mod3_lci`i'
+		gen erl_mod3_uci = area_mod3_uci`i'
+			
+		
+			
+		append using `objmm'
+		save `objmm', replace
+		restore
+		timer off 1
+	  }   
+timer list 1    
+use `objmm', clear
 sort cond
-
-export excel "LE_main_model_46_100.xlsx", firstrow(variables) replace
