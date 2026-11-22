@@ -1,6 +1,7 @@
 gen diff=age_last-age_dementia
 drop if diff<=1 
-stset age_last, failure(death_status == 1) enter(age_dementia)  
+gen age_dementia_1=age_dementia+1
+stset age_last, failure(death_status == 1) enter(age_dementia_1)  
 stpm2 i.sdoh_status i.sex  i.ethnic i.history_diabetes i.history_hypertension i.history_highcholesterol , df(4) scale(hazard) eform nolog   
 
 // create an empty file to save the yll results - ru altogether 
@@ -11,7 +12,7 @@ save `objmm', emptyok replace
 restore
 timer clear 1
 // create the conditional age and the time variable
-foreach i  of num 46(1)100 {
+foreach i  of num 47(1)100 {
 		timer on 1
 		preserve
 		gen t`i'= `i' in 1/100  
@@ -63,3 +64,6 @@ foreach i  of num 46(1)100 {
 timer list 1    
 use `objmm', clear
 sort cond
+
+
+
